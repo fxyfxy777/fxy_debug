@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fxy_debug"
+version = "0.1.0"
+description = "fxy用于调试的工具集"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "fxy"}]
+
+[project.optional-dependencies]
+paddle = ["paddlepaddle"]
+
+[tool.setuptools.packages.find]
+include = ["fxy_debug*"]
