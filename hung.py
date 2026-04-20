@@ -1,17 +1,13 @@
-# gpu_stress.py
+# gpu_stress.py — 单卡版，由 bash 脚本循环调用
 import paddle
-import multiprocessing as mp
-import signal
 import sys
 
-def worker(gpu_id):
+def main(gpu_id):
     paddle.set_device(f"gpu:{gpu_id}")
 
     # ---- 占满显存 ----
-    # 获取该卡总显存（bytes）
     props = paddle.device.cuda.get_device_properties(gpu_id)
     total_mem = props.total_memory
-    # 预留 12000MB 给 CUDA context / 驱动，其余全部占用
     reserve = 12000 * 1024 * 1024
     alloc_bytes = max(0, total_mem - reserve)
     n_elements = alloc_bytes // 2  # float16 = 2 bytes
@@ -29,44 +25,22 @@ def worker(gpu_id):
         c = paddle.matmul(a, b)
     paddle.device.synchronize()
 
-    # 持续计算，同时 mem_holder 保持显存占用
+    # 持续计算
+    step = 0
     while True:
         c = paddle.matmul(a, b)
         c = paddle.nn.functional.relu(c)
+        c = paddle.matmul(c, a)
+        c = paddle.nn.functional.gelu(c)
+        c = c + paddle.matmul(b, a)
+        c = paddle.nn.functional.softmax(c, axis=-1)
+        val = c[0, 0].item()
+        step += 1
+        if step % 100 == 0:
+            print(f"[GPU {gpu_id}] step={step}, val={val:.6f}", flush=True)
 
 if __name__ == "__main__":
-    mp.set_start_method("spawn")
-
-    # 从命令行参数读取 GPU id 列表，例如：python hang.py 0 2 3
-    if len(sys.argv) > 1:
-        gpus = [int(x) for x in sys.argv[1:]]
-    else:
-        gpus = [0, 1, 2, 3]
-
-    print(f"[hang.py] 启动占用 GPU: {gpus}", flush=True)
-
-    procs = []
-    for gid in gpus:
-        p = mp.Process(target=worker, args=(gid,))
-        p.daemon = True
-        p.start()
-        procs.append(p)
-
-    def cleanup(sig, frame):
-        print(f"\n[hang.py] 收到信号 {sig}，正在终止子进程...", flush=True)
-        for p in procs:
-            if p.is_alive():
-                p.terminate()
-        for p in procs:
-            p.join(timeout=5)
-        # 如果 terminate 杀不掉，强制 kill
-        for p in procs:
-            if p.is_alive():
-                p.kill()
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, cleanup)
-    signal.signal(signal.SIGINT, cleanup)
-
-    for p in procs:
-        p.join()
+    if len(sys.argv) != 2:
+        print(f"用法: python {sys.argv[0]} <gpu_id>")
+        sys.exit(1)
+    main(int(sys.argv[1]))
