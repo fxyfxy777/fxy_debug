@@ -1,7 +1,7 @@
 #!/bin/bash
 # hung.sh — 每小时检查 GPU 利用率，对利用率 < 50% 的卡启动 hang.py 占用
 
-HANG_SCRIPT="/root/paddlejob/share-storage/gpfs/fanxiangyu01/hang.py"
+HANG_SCRIPT="hung.py"
 THRESHOLD=50
 CHECK_INTERVAL=3600   # 秒，1 小时
 
