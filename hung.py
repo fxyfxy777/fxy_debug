@@ -1,6 +1,7 @@
 # gpu_stress.py
 import paddle
 import multiprocessing as mp
+import signal
 import sys
 
 def worker(gpu_id):
@@ -47,8 +48,25 @@ if __name__ == "__main__":
     procs = []
     for gid in gpus:
         p = mp.Process(target=worker, args=(gid,))
+        p.daemon = True
         p.start()
         procs.append(p)
+
+    def cleanup(sig, frame):
+        print(f"\n[hang.py] 收到信号 {sig}，正在终止子进程...", flush=True)
+        for p in procs:
+            if p.is_alive():
+                p.terminate()
+        for p in procs:
+            p.join(timeout=5)
+        # 如果 terminate 杀不掉，强制 kill
+        for p in procs:
+            if p.is_alive():
+                p.kill()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, cleanup)
+    signal.signal(signal.SIGINT, cleanup)
 
     for p in procs:
         p.join()
